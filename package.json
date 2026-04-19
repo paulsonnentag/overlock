@@ -1,0 +1,17 @@
+{
+  "name": "overlock-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Monorepo for the Overlock attribution-proxy runtime and its ESLint plugin.",
+  "type": "module",
+  "scripts": {
+    "lint": "pnpm -r --if-present run lint",
+    "test": "pnpm -r --if-present run test",
+    "build": "pnpm -r --if-present run build",
+    "typecheck": "pnpm -r --if-present run typecheck"
+  },
+  "packageManager": "pnpm@10.12.1",
+  "engines": {
+    "node": ">=20"
+  }
+}

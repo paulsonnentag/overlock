@@ -1,0 +1,25 @@
+{
+  "name": "@overlock/runtime",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Attribution-proxy runtime for Overlock tool components. Mount/unmount cycle and parent-component traversal in place; attribution proxy still TBD.",
+  "type": "module",
+  "main": "./dist/runtime.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/runtime.js"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "vite build && tsc --emitDeclarationOnly",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.8",
+    "vite": "^6",
+    "@types/node": "^22"
+  }
+}

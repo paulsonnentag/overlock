@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Overlock demo</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 720px;
+        margin: 2rem auto;
+        color: #1a1a1a;
+      }
+      #app {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+      .toolbar {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Overlock demo</h1>
+    <p>
+      Pick a tool, pick a colour, and drag inside the white canvas. Each child
+      tool walks up via <code>element.parentComponent</code> until it finds the
+      <code>&lt;paint-canvas&gt;</code> host, sets
+      <code>canvas.dataset.selectedTool</code> on click, reads
+      <code>host.color</code> when drawing, and listens for pointer events on
+      the host.
+    </p>
+    <p>
+      The page also tries to load <code>tools/bad-line/</code> — an
+      intentionally illegal tool. The verify-on-load middleware rejects it
+      before mounting; the failure shows up in the red box below while the
+      legal tools mount as normal.
+    </p>
+    <div id="app">
+      <paint-canvas>
+        <div class="toolbar">
+          <line-tool></line-tool>
+          <rect-tool></rect-tool>
+          <color-picker></color-picker>
+        </div>
+      </paint-canvas>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

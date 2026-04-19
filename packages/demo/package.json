@@ -1,0 +1,23 @@
+{
+  "name": "demo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint tools",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@overlock/runtime": "workspace:*",
+    "overlock": "workspace:*"
+  },
+  "devDependencies": {
+    "eslint": "^10.2.1",
+    "typescript": "^5.8",
+    "vite": "^6",
+    "@types/node": "^22"
+  }
+}
