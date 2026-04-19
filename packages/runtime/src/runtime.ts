@@ -1,10 +1,8 @@
-import type { ComponentManifest, ComponentElement, MountFn } from "./types.js";
-import { Stores, type ComponentId } from "./stores.js";
-import { wrap, type WrapContext } from "./proxy.js";
+import type { ComponentManifest, MountFn } from "./types.js";
+import { Component } from "./component.js";
+import * as componentStore from "./component-store.js";
 
 type Claim = { scope: string; rewriteTo?: string };
-
-type MountRecord = { id: ComponentId; userCleanup: () => void };
 
 export function createRuntime(root: HTMLElement): Runtime {
   return new Runtime(root);
@@ -16,32 +14,29 @@ export function createRuntime(root: HTMLElement): Runtime {
  * `destroy()`. Each manifest URL should be loaded at most once per instance
  * via `loadComponent` — repeated calls will refetch and produce duplicate
  * registrations.
+ *
+ * Per-mount state (proxy bookkeeping, attribution, DOM swap mechanics) lives
+ * on `Component` instances. This class is just registry + observer + the
+ * iterable set of mounts it owns.
  */
 export class Runtime {
-  // Mount registry: what to run when a tag is seen, and how to tear it down.
+  // Mount registry: what to run when a tag is seen.
   readonly #registry = new Map<string, MountFn>();
-  readonly #mounted = new WeakMap<Element, MountRecord>();
 
   // Tag allocation: per-baseName claim + per-scope namespace memo.
   readonly #claims = new Map<string, Claim>();
   readonly #namespaceByScope = new Map<string, string>();
 
-  // Attribution backing stores. The proxy handed to each component routes all
-  // cross-component-visible writes (style/class/attr/child) through here, so
-  // unmount can fully reverse a component's contributions.
-  readonly #stores = new Stores();
-  readonly #wrapCtx: WrapContext;
+  // Components mounted by this runtime. Lookup-by-element goes through the
+  // singleton `component-store`; this set is just for iteration during the
+  // tag rewrite walk in `#allocateTag` and during `destroy`.
+  readonly #mounted = new Set<Component>();
 
-  // DOM binding: root element plus the observer (null once destroyed).
   readonly #rootEl: HTMLElement;
   #observer: MutationObserver | null = null;
 
   constructor(root: HTMLElement) {
     this.#rootEl = root;
-    this.#wrapCtx = {
-      stores: this.#stores,
-      isComponent: (tag: string) => this.#registry.has(tag),
-    };
     this.#forEachElementIn(root, (el) => this.#mountIfRegistered(el));
     const observer = new MutationObserver((records) => {
       for (const record of records) {
@@ -51,15 +46,16 @@ export class Runtime {
           }
         }
         for (const node of record.removedNodes) {
-          if (node instanceof Element) {
-            this.#forEachElement(node, (el) => {
-              this.#unmountIfMounted(el);
-              // Drop per-element bookkeeping for nodes that have left the
-              // document. Reverse-index entries keyed by componentId are
-              // cleaned by the contributing component's own unmount/unwind.
-              this.#stores.evictElement(el);
-            });
-          }
+          if (!(node instanceof Element)) continue;
+          // A node that is still connected has been moved, not removed —
+          // e.g. `Component.rename` migrates children from old to new
+          // element, which the observer reports as remove+add records on
+          // the children individually. Skip the spurious unmount.
+          if (node.isConnected) continue;
+          this.#forEachElement(node, (el) => {
+            if (el.isConnected) return;
+            this.#unmountIfMounted(el);
+          });
         }
       }
     });
@@ -76,7 +72,10 @@ export class Runtime {
     if (this.#observer === null) return;
     this.#observer.disconnect();
     this.#observer = null;
-    this.#forEachElementIn(this.#rootEl, (el) => this.#unmountIfMounted(el));
+    for (const comp of Array.from(this.#mounted)) {
+      comp.unmount();
+    }
+    this.#mounted.clear();
   }
 
   #assertAlive(): void {
@@ -122,7 +121,7 @@ export class Runtime {
 
     this.#forEachElementIn(this.#rootEl, (el) => {
       if (el.localName !== name) return;
-      if (previous && this.#mounted.has(el)) this.#unmountIfMounted(el);
+      if (previous && componentStore.lookup(el)) this.#unmountIfMounted(el);
       this.#mountIfRegistered(el);
     });
   }
@@ -149,9 +148,12 @@ export class Runtime {
         this.#registry.delete(baseName);
       }
       claim.rewriteTo = oldTag;
-      this.#forEachElementIn(this.#rootEl, (el) => {
-        if (el.localName === baseName) this.#replaceElement(el, oldTag);
-      });
+      // Iterate currently-mounted Components rather than walking the DOM:
+      // every element that needs renaming has a Component on it (it was
+      // mounted under the now-disputed baseName).
+      for (const comp of Array.from(this.#mounted)) {
+        if (comp.el.localName === baseName) comp.rename(oldTag);
+      }
     }
     return `${this.#getOrCreateNamespace(scope)}:${baseName}`;
   }
@@ -176,7 +178,7 @@ export class Runtime {
   }
 
   #mountIfRegistered(el: Element): void {
-    if (this.#mounted.has(el)) return;
+    if (componentStore.lookup(el)) return;
     const rewriteTag = this.#claims.get(el.localName)?.rewriteTo;
     if (rewriteTag) {
       this.#replaceElement(el, rewriteTag);
@@ -185,33 +187,27 @@ export class Runtime {
     const mountFn = this.#registry.get(el.localName);
     if (!mountFn) return;
 
-    const id: ComponentId = Symbol(`component:${el.localName}`);
-    const proxy = wrap(el as HTMLElement, id, this.#wrapCtx) as ComponentElement;
-    const cleanup = mountFn(proxy);
-    const userCleanup = typeof cleanup === "function" ? cleanup : noop;
-    this.#mounted.set(el, { id, userCleanup });
+    const comp = new Component(el as HTMLElement);
+    this.#mounted.add(comp);
+    comp.mount(mountFn);
   }
 
   #unmountIfMounted(el: Element): void {
-    const rec = this.#mounted.get(el);
-    if (!rec) return;
-    this.#mounted.delete(el);
-    try {
-      rec.userCleanup();
-    } finally {
-      // Reverse every contribution this component made: clears its style
-      // entries (reconciling each property to the next-most-recent
-      // contributor or removing it), zeroes its class ref-counts, drops its
-      // attribute writes, and detaches any children it injected that are
-      // still attached.
-      this.#stores.unwind(rec.id);
-    }
+    const comp = componentStore.lookup(el);
+    if (!comp || !this.#mounted.has(comp)) return;
+    this.#mounted.delete(comp);
+    comp.unmount();
   }
 
+  /**
+   * Used for stray/unmounted elements with a baseName that was claimed after
+   * insertion (mount path's rewrite branch). Mounted elements with the same
+   * baseName go through `Component.rename` instead.
+   */
   #replaceElement(oldEl: Element, newTag: string): void {
     const parent = oldEl.parentNode;
     if (!parent) return;
-    const newEl = document.createElement(newTag);
+    const newEl = oldEl.ownerDocument.createElement(newTag);
     for (const attr of Array.from(oldEl.attributes)) {
       newEl.setAttribute(attr.name, attr.value);
     }
@@ -247,5 +243,3 @@ function toScope(url: URL): string {
 function slug(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9-]/g, "-");
 }
-
-function noop(): void {}
