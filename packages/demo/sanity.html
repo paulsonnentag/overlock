@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Overlock runtime sanity</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 720px;
+        margin: 2rem auto;
+        color: #1a1a1a;
+      }
+      pre {
+        background: #f6f8fa;
+        padding: 12px;
+        border-radius: 6px;
+      }
+      .pass {
+        color: #137333;
+      }
+      .fail {
+        color: #b91c1c;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Runtime attribution sanity</h1>
+    <p>
+      Exercises the worked example from the design doc: A and B both contribute
+      style and children to the same element. B unmounts first; A's
+      contributions take over. Then A unmounts.
+    </p>
+    <div id="app">
+      <comp-a id="a"><comp-b id="b"></comp-b></comp-a>
+    </div>
+    <h2>Results</h2>
+    <pre id="log"></pre>
+    <script type="module">
+      import { createRuntime } from "@overlock/runtime";
+
+      const log = document.getElementById("log");
+      let failures = 0;
+      function assert(cond, msg) {
+        const status = cond ? "PASS" : "FAIL";
+        if (!cond) failures++;
+        const line = document.createTextNode(`${status}  ${msg}\n`);
+        const span = document.createElement("span");
+        span.className = cond ? "pass" : "fail";
+        span.appendChild(line);
+        log.appendChild(span);
+      }
+      function frame() {
+        return new Promise((r) => requestAnimationFrame(r));
+      }
+
+      const app = document.getElementById("app");
+      const runtime = createRuntime(app);
+
+      // Load A first so its tag is in the registry by the time B mounts; B's
+      // mount looks up `parentComponent` which checks the registry.
+      await runtime.loadComponent("/sanity-tools/comp-a/comp-a.json");
+      await runtime.loadComponent("/sanity-tools/comp-b/comp-b.json");
+      await frame();
+
+      const a = document.getElementById("a");
+      const b = document.getElementById("b");
+
+      // Both mounted: B's background wins; A's padding stands; B's outline applied.
+      assert(
+        a.style.background === "lavender",
+        "B overrides background to lavender",
+      );
+      assert(a.style.padding === "16px", "A's padding survives");
+      assert(
+        a.style.outline.includes("2px") && a.style.outline.includes("red"),
+        "B's outline applied",
+      );
+      assert(a.querySelector("span") !== null, "B's badge appended to A");
+      assert(a.querySelector("h1") !== null, "A's heading present");
+
+      // Unmount B by removing it. The MutationObserver runs the runtime's
+      // unwind for B, which clears its style contributions on A and detaches
+      // its badge.
+      b.remove();
+      await frame();
+
+      assert(
+        a.style.background === "white",
+        "background falls back to A's white after B unmounts",
+      );
+      assert(a.style.outline === "", "outline cleared after B unmounts");
+      assert(
+        a.querySelector("span") === null,
+        "B's badge removed after B unmounts",
+      );
+      assert(a.style.padding === "16px", "A's padding still present");
+      assert(a.querySelector("h1") !== null, "A's heading still present");
+
+      // Unmount A. Its inline style entries should be cleared too.
+      a.remove();
+      await frame();
+
+      assert(a.style.background === "", "A's background cleared on unmount");
+      assert(a.style.padding === "", "A's padding cleared on unmount");
+
+      log.appendChild(
+        Object.assign(document.createElement("span"), {
+          className: failures === 0 ? "pass" : "fail",
+          textContent: `\n${failures === 0 ? "All checks passed." : `${failures} failure(s).`}\n`,
+        }),
+      );
+    </script>
+  </body>
+</html>

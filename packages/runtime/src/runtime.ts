@@ -1,6 +1,10 @@
 import type { ComponentManifest, ComponentElement, MountFn } from "./types.js";
+import { Stores, type ComponentId } from "./stores.js";
+import { wrap, type WrapContext } from "./proxy.js";
 
 type Claim = { scope: string; rewriteTo?: string };
+
+type MountRecord = { id: ComponentId; userCleanup: () => void };
 
 export function createRuntime(root: HTMLElement): Runtime {
   return new Runtime(root);
@@ -16,11 +20,17 @@ export function createRuntime(root: HTMLElement): Runtime {
 export class Runtime {
   // Mount registry: what to run when a tag is seen, and how to tear it down.
   readonly #registry = new Map<string, MountFn>();
-  readonly #mounted = new WeakMap<Element, () => void>();
+  readonly #mounted = new WeakMap<Element, MountRecord>();
 
   // Tag allocation: per-baseName claim + per-scope namespace memo.
   readonly #claims = new Map<string, Claim>();
   readonly #namespaceByScope = new Map<string, string>();
+
+  // Attribution backing stores. The proxy handed to each component routes all
+  // cross-component-visible writes (style/class/attr/child) through here, so
+  // unmount can fully reverse a component's contributions.
+  readonly #stores = new Stores();
+  readonly #wrapCtx: WrapContext;
 
   // DOM binding: root element plus the observer (null once destroyed).
   readonly #rootEl: HTMLElement;
@@ -28,6 +38,10 @@ export class Runtime {
 
   constructor(root: HTMLElement) {
     this.#rootEl = root;
+    this.#wrapCtx = {
+      stores: this.#stores,
+      isComponent: (tag: string) => this.#registry.has(tag),
+    };
     this.#forEachElementIn(root, (el) => this.#mountIfRegistered(el));
     const observer = new MutationObserver((records) => {
       for (const record of records) {
@@ -38,7 +52,13 @@ export class Runtime {
         }
         for (const node of record.removedNodes) {
           if (node instanceof Element) {
-            this.#forEachElement(node, (el) => this.#unmountIfMounted(el));
+            this.#forEachElement(node, (el) => {
+              this.#unmountIfMounted(el);
+              // Drop per-element bookkeeping for nodes that have left the
+              // document. Reverse-index entries keyed by componentId are
+              // cleaned by the contributing component's own unmount/unwind.
+              this.#stores.evictElement(el);
+            });
           }
         }
       }
@@ -165,19 +185,27 @@ export class Runtime {
     const mountFn = this.#registry.get(el.localName);
     if (!mountFn) return;
 
-    const cleanup = mountFn(this.#wrap(el as HTMLElement));
-    if (typeof cleanup === "function") {
-      this.#mounted.set(el, cleanup);
-    } else {
-      this.#mounted.set(el, noop);
-    }
+    const id: ComponentId = Symbol(`component:${el.localName}`);
+    const proxy = wrap(el as HTMLElement, id, this.#wrapCtx) as ComponentElement;
+    const cleanup = mountFn(proxy);
+    const userCleanup = typeof cleanup === "function" ? cleanup : noop;
+    this.#mounted.set(el, { id, userCleanup });
   }
 
   #unmountIfMounted(el: Element): void {
-    const cleanup = this.#mounted.get(el);
-    if (!cleanup) return;
+    const rec = this.#mounted.get(el);
+    if (!rec) return;
     this.#mounted.delete(el);
-    cleanup();
+    try {
+      rec.userCleanup();
+    } finally {
+      // Reverse every contribution this component made: clears its style
+      // entries (reconciling each property to the next-most-recent
+      // contributor or removing it), zeroes its class ref-counts, drops its
+      // attribute writes, and detaches any children it injected that are
+      // still attached.
+      this.#stores.unwind(rec.id);
+    }
   }
 
   #replaceElement(oldEl: Element, newTag: string): void {
@@ -203,27 +231,6 @@ export class Runtime {
       fn(node);
       node = walker.nextNode() as Element | null;
     }
-  }
-
-  #wrap(el: HTMLElement): ComponentElement {
-    const registry = this.#registry;
-    const wrap = (node: HTMLElement): ComponentElement => {
-      if (!Object.prototype.hasOwnProperty.call(node, "parentComponent")) {
-        Object.defineProperty(node, "parentComponent", {
-          get(this: HTMLElement): ComponentElement | null {
-            let cur: HTMLElement | null = this.parentElement;
-            while (cur && !registry.has(cur.localName)) {
-              cur = cur.parentElement;
-            }
-            return cur ? wrap(cur) : null;
-          },
-          enumerable: false,
-          configurable: true,
-        });
-      }
-      return node as ComponentElement;
-    };
-    return wrap(el);
   }
 }
 

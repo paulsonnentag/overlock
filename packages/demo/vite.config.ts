@@ -1,7 +1,7 @@
 import { defineConfig, type Plugin } from "vite";
 import { cp } from "node:fs/promises";
 import { resolve } from "node:path";
-import { verifyOnLoad } from "./verify-plugin.js";
+import { verifyOnLoad } from "./src/verify-plugin.js";
 
 function copyTools(): Plugin {
   return {

@@ -35,9 +35,9 @@ The DOM is:
 
 ## Verify-on-load
 
-The dev server has a verify-on-load Vite plugin (`verify-plugin.ts`) that intercepts `tools/**/*.js` requests, runs ESLint with `overlock/recommended` against the source, and either passes the file through or replies with a JS module that throws on import. The dynamic `import()` inside `runtime.loadComponent` then rejects, and the failure surfaces as a red box in `#app` while the other tools still mount.
+The dev server has a verify-on-load Vite plugin (`src/verify-plugin.ts`) that intercepts `tools/**/*.js` requests, runs ESLint with `overlock/recommended` against the source, and either passes the file through or replies with a JS module that throws on import. The dynamic `import()` inside `runtime.loadComponent` then rejects, and the failure surfaces as a red box in `#app` while the other tools still mount.
 
-The demo ships a checked-in `tools/bad-line/bad-line.js` that breaks several rules at once (top-level `console.log`, `eval`, computed member access, `document` reference). On every page load `main.ts` asks the runtime to load it, and you should see the verifier rejecting it in the red box on the page. The legal tools mount alongside.
+The demo ships a checked-in `tools/bad-line/bad-line.js` that breaks several rules at once (top-level `console.log`, `eval`, computed member access, `document` reference). On every page load `src/main.ts` asks the runtime to load it, and you should see the verifier rejecting it in the red box on the page. The legal tools mount alongside.
 
 ```
 Verifier rejected 1 tool:
@@ -66,4 +66,4 @@ The verifier here runs as a Vite dev middleware, not inside the runtime itself. 
 - `pnpm dev` — Vite dev server with verify-on-load.
 - `pnpm build` — production build (no verifier; run `pnpm lint` in CI).
 - `pnpm lint` — ESLint CLI on `tools/**/*.js`. Same rules as the dev middleware.
-- `pnpm typecheck` — `tsc --noEmit` on `main.ts` and `verify-plugin.ts`.
+- `pnpm typecheck` — `tsc --noEmit` on `src/**/*.ts`.
