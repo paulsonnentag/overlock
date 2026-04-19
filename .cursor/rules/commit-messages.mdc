@@ -5,13 +5,14 @@ alwaysApply: true
 
 # Commit Messages
 
-- Use a single-line subject in the **imperative mood** ("Add", "Fix", "Replace", not "Added"/"Adds").
-- **Sentence case**, no trailing period.
+- Use a single-line subject in the **imperative mood** ("add", "fix", "replace", not "added"/"adds").
+- **Lowercase first letter**, no trailing period. Proper nouns and acronyms keep their natural casing (e.g. `HMR`, `DOM`, `TypeScript`).
 - Aim for ≤ 72 characters; hard cap at 80.
 - No `type:` / `scope:` prefixes (no Conventional Commits).
 - Describe the *what* and the *why* when non-obvious; skip a body unless it adds information that isn't in the diff.
 
-✅ `Add HMR boundary tracking to runtime`
-✅ `Fix loader resolution for scoped packages`
+✅ `add HMR boundary tracking to runtime`
+✅ `fix loader resolution for scoped packages`
+❌ `Add HMR boundary tracking to runtime`
 ❌ `feat(runtime): added HMR`
 ❌ `Updated stuff`
