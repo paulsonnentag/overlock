@@ -1,5 +1,3 @@
-# Overlock - stitch together untrusted components, safely
+# Overlock
 
-When you want to compose
-
-- allow to run untrusted code in the same
+**stitch together untrusted components, safely**
