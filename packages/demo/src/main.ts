@@ -39,6 +39,8 @@ async function main() {
   await loadComponentVerified(runtime, "/tools/bad-line/bad-line.json");
 }
 
+void main();
+
 /**
  * Fetch a manifest, fetch the referenced JS source, run the browser
  * verifier against it, then dynamic-import the same URL (browsers serve
