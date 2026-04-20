@@ -5,12 +5,25 @@ const MANIFESTS = [
   "/tools/line/line.json",
   "/tools/rect/rect.json",
   "/tools/color-picker/color-picker.json",
+  "/tools/import-demo/import-demo.json",
   "/tools/bad-line/bad-line.json",
 ];
 
 async function main() {
   const app = document.getElementById("app")!;
   const runtime = createRuntime(app);
+
+  // Root-level loader: any tool mounted under <module-root> can call
+  // `loadModule(element, "./foo.js")` and `findClosest` will bubble up to
+  // this component. Nested loader components can shadow it for a subtree.
+  runtime.define("module-root", (element) => {
+    element.loadModule = (specifier: string): Promise<unknown> =>
+      import(/* @vite-ignore */ new URL(specifier, location.href).href);
+    return () => {
+      element.loadModule = undefined;
+    };
+  });
+
   const results = await Promise.allSettled(
     MANIFESTS.map((url) => runtime.loadComponent(url)),
   );

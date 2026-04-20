@@ -7,7 +7,8 @@ Runtime for the Overlock attribution-proxy sandbox. Workspace-private while it b
 - Component registry keyed by tag name, with namespace allocation and tag rewriting on collision.
 - `MutationObserver` over a chosen root element that mounts/unmounts components as their tags appear and disappear.
 - `loadComponent(manifestUrl)` that fetches a JSON manifest and dynamic-`import()`s the module.
-- `element.parentComponent` on the value handed to a mount function: returns the nearest ancestor whose tag is in the registry (the parent **component**, not the parent DOM node), or `null` at the root.
+- `element.findParent(predicate)` and `element.findClosest(predicate)` on the value handed to a mount function: walk the registered-component chain (skipping plain DOM ancestors) and return the first ancestor — or for `findClosest`, also `element` itself — for which the predicate is truthy, or `null` if none matches. `findClosest` mirrors `Element.closest` semantics.
+- `runtime.define(name, mountFn)` for inline component registration without a manifest fetch — useful for root-level wiring (e.g. a `<module-root>` that stashes a scoped module loader on itself).
 
 **What's coming next:**
 

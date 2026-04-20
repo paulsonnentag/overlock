@@ -1,5 +1,6 @@
 import * as componentStore from "./component-store.js";
 import type { Component } from "./component.js";
+import type { ComponentElement, ElementPredicate } from "./types.js";
 
 /**
  * Wrap a `(target, writer)` pair as an `HTMLElement`-shaped Proxy.
@@ -20,7 +21,8 @@ export function wrap(target: Component, writer: Component): HTMLElement {
   return new Proxy({} as HTMLElement, {
     get(_, prop) {
       const t = target.el;
-      if (prop === "parentComponent") return parentComponentLookup(t, writer);
+      if (prop === "findParent") return makeFindParent(t, writer);
+      if (prop === "findClosest") return makeFindClosest(target, writer);
       if (prop === "style") return styleProxy(target, writer);
       if (prop === "classList") return classListProxy(target, writer);
 
@@ -276,15 +278,36 @@ function classListProxy(target: Component, writer: Component): DOMTokenList {
   return proxy as unknown as DOMTokenList;
 }
 
-function parentComponentLookup(
-  target: HTMLElement,
-  writer: Component,
-): HTMLElement | null {
-  let cur: HTMLElement | null = target.parentElement;
-  while (cur && !componentStore.lookup(cur)) {
-    cur = cur.parentElement;
-  }
-  if (!cur) return null;
-  const comp = componentStore.lookup(cur)!;
-  return wrap(comp, writer);
+/**
+ * Walk the parent-component chain (exclusive of `target`). For each
+ * registered ancestor, produce a proxy bound to `writer`'s identity and
+ * test the predicate against it. Returns the first match, or `null`.
+ */
+function makeFindParent(target: HTMLElement, writer: Component) {
+  return (predicate: ElementPredicate): ComponentElement | null => {
+    let cur: HTMLElement | null = target.parentElement;
+    while (cur) {
+      const comp = componentStore.lookup(cur);
+      if (comp) {
+        const proxy = wrap(comp, writer) as ComponentElement;
+        if (predicate(proxy)) return proxy;
+      }
+      cur = cur.parentElement;
+    }
+    return null;
+  };
+}
+
+/**
+ * Like `makeFindParent`, but tests `target` first — mirrors the semantics
+ * of `Element.closest`. The "self" proxy is the same `(target, writer)`
+ * pair the caller is already holding, re-wrapped so it lives inside the
+ * `findClosest` return path on the same footing as the ancestor proxies.
+ */
+function makeFindClosest(target: Component, writer: Component) {
+  return (predicate: ElementPredicate): ComponentElement | null => {
+    const self = wrap(target, writer) as ComponentElement;
+    if (predicate(self)) return self;
+    return makeFindParent(target.el, writer)(predicate);
+  };
 }

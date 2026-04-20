@@ -5,6 +5,7 @@
   "description": "Monorepo for the Overlock attribution-proxy runtime and its ESLint plugin.",
   "type": "module",
   "scripts": {
+    "dev": "pnpm --filter demo dev",
     "lint": "pnpm -r --if-present run lint",
     "test": "pnpm -r --if-present run test",
     "build": "pnpm -r --if-present run build",

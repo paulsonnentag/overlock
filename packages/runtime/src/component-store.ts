@@ -2,7 +2,7 @@ import type { Component } from "./component";
 
 /**
  * Singleton element to component lookup. Both `Runtime` (mount/unmount path)
- * and the proxy (`parentComponent` walk) read from here. Keyed by `Element`
+ * and the proxy (`findParent` / `findClosest` walk) read from here. Keyed by `Element`
  * via `WeakMap` so it never keeps DOM nodes alive on its own — Components
  * unregister themselves on `unmount()`, and any leftover entries for elements
  * that get GCd vanish with them.

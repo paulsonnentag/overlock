@@ -68,6 +68,25 @@ export class Runtime {
     return this.#doLoad(manifestUrl);
   }
 
+  /**
+   * Register a component inline, without fetching a manifest. The caller
+   * chooses the tag name (must contain a hyphen, per custom-element rules)
+   * and hands over the mount fn directly. Intended for root-level wiring
+   * from the embedding page — local components that have no manifest or
+   * scope, e.g. a `<module-root>` that stashes a `loadModule` on itself.
+   *
+   * If an existing component is registered under the same name, any
+   * currently-mounted instance is unmounted and re-mounted against the new
+   * mount fn — same behavior as `#registerComponent` in `#doLoad`.
+   */
+  define(name: string, mountFn: MountFn): void {
+    this.#assertAlive();
+    if (!name.includes("-")) {
+      throw new Error(`define(${name}): tag must contain a hyphen`);
+    }
+    this.#registerComponent(name, mountFn);
+  }
+
   destroy(): void {
     if (this.#observer === null) return;
     this.#observer.disconnect();

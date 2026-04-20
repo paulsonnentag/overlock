@@ -3,10 +3,7 @@ const FALLBACK_COLOR = "#1f2937";
 const STROKE_WIDTH = 2;
 
 export default function (element) {
-  let host = element.parentComponent;
-  while (host && !host.canvas) {
-    host = host.parentComponent;
-  }
+  const host = element.findClosest((a) => a.canvas);
   if (!host) return () => {};
   const canvas = host.canvas;
   const ctx = host.ctx;

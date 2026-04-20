@@ -19,18 +19,23 @@ Open `http://localhost:5173`. Pick the Line or Rectangle tool, pick a colour, an
 The DOM is:
 
 ```html
-<paint-canvas>
-  <div class="toolbar">
-    <line-tool></line-tool>
-    <rect-tool></rect-tool>
-    <color-picker></color-picker>
-  </div>
-</paint-canvas>
+<module-root>
+  <paint-canvas>
+    <div class="toolbar">
+      <line-tool></line-tool>
+      <rect-tool></rect-tool>
+      <color-picker></color-picker>
+      <import-demo></import-demo>
+    </div>
+  </paint-canvas>
+</module-root>
 ```
 
-- `<paint-canvas>` creates a real `<canvas>` element, then exposes `element.canvas`, `element.ctx`, and `element.color` (defaulting to `#1f2937`) on its own host element. It is the parent component for everything else.
-- `<line-tool>` and `<rect-tool>` walk up via `element.parentComponent` until they find a host that has a `canvas` property. Each one renders a button. On click they set `canvas.dataset.selectedTool` to their name; while drawing they read that data attribute to decide whether the gesture is theirs, and read `host.color` to pick the stroke colour. They register pointer events on the host (not on the canvas), and filter to events whose target is the canvas.
-- `<color-picker>` does the same `parentComponent` walk and renders a row of colour swatches. Clicking a swatch writes `host.color`; the line and rectangle tools read it on the next gesture.
+- `<module-root>` is registered inline from `src/main.ts` via `runtime.define(...)` and stashes `element.loadModule = spec => import(new URL(spec, location.href).href)`. Descendants can reach it with `element.findClosest(a => a.loadModule)`.
+- `<paint-canvas>` creates a real `<canvas>` element, then exposes `element.canvas`, `element.ctx`, and `element.color` (defaulting to `#1f2937`) on its own host element. It is the parent component for everything inside the toolbar.
+- `<line-tool>` and `<rect-tool>` find the canvas host with `element.findClosest(a => a.canvas)`. Each one renders a button. On click they set `canvas.dataset.selectedTool` to their name; while drawing they read that data attribute to decide whether the gesture is theirs, and read `host.color` to pick the stroke colour. They register pointer events on the host (not on the canvas), and filter to events whose target is the canvas.
+- `<color-picker>` does the same `findClosest` lookup and renders a row of colour swatches. Clicking a swatch writes `host.color`; the line and rectangle tools read it on the next gesture.
+- `<import-demo>` finds the nearest ancestor with a `loadModule` function (the `<module-root>` above) and asks it to `loadModule("/tools/import-demo/badge.js")`. The loaded module's default export mounts a badge into the tile, proving end-to-end scoped dynamic import via the same walking primitive.
 - Sibling tools coordinate purely through plain DOM `click` event bubbling on the host. Each tool listens for `click` on its host and re-syncs its highlight from `canvas.dataset.selectedTool` / `host.color`. No `CustomEvent`, no `MutationObserver` — neither is in the lint allowlist.
 
 ## Verify-on-load

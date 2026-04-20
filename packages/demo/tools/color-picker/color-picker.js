@@ -2,10 +2,7 @@ const COLORS = ["#1f2937", "#dc2626", "#16a34a", "#2563eb", "#f59e0b"];
 const SWATCH_SIZE = "20px";
 
 export default function (element) {
-  let host = element.parentComponent;
-  while (host && !host.canvas) {
-    host = host.parentComponent;
-  }
+  const host = element.findClosest((a) => a.canvas);
   if (!host) return () => {};
 
   element.style.display = "inline-flex";
