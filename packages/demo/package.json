@@ -7,12 +7,12 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "eslint tools",
+    "lint": "eslint public/tools",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@overlock/runtime": "workspace:*",
-    "overlock": "workspace:*"
+    "@overlock/verifier": "workspace:*"
   },
   "devDependencies": {
     "eslint": "^10.2.1",

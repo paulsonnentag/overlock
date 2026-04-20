@@ -40,14 +40,31 @@ export class Component {
   mount(mountFn: MountFn): void {
     componentStore.register(this.el, this);
     const proxy = wrap(this, this) as ComponentElement;
-    const cleanup = mountFn(proxy);
-    this.#userCleanup = typeof cleanup === "function" ? cleanup : noop;
+    try {
+      const cleanup = mountFn(proxy);
+      this.#userCleanup = typeof cleanup === "function" ? cleanup : noop;
+    } catch (err) {
+      // The mount fn threw before returning a cleanup; there is nothing
+      // for the runtime to run on unmount. Leave `#userCleanup` as the
+      // no-op and surface the failure inside the component's own element
+      // so the user sees it in situ rather than on the console.
+      this.#userCleanup = noop;
+      this.#renderError(err);
+    }
   }
 
   unmount(): void {
     if (this.#unmounted) return;
     try {
-      this.#userCleanup();
+      try {
+        this.#userCleanup();
+      } catch (err) {
+        // Tear-down path: the user's cleanup threw. The element is being
+        // removed anyway so there is no useful way to render the error in
+        // place; just log and let the reverse-index scrub below run, so
+        // attribution state doesn't leak onto siblings that outlive us.
+        console.error("[overlock] cleanup threw", err);
+      }
     } finally {
       // Flip the flag before scrubbing targets: if a target is itself
       // partway through unmounting and tries to call back into us, our own
@@ -207,6 +224,62 @@ export class Component {
     this.#touched.add(target);
   }
 
+  /**
+   * Turn the element into a read-only error badge when the mount fn threw
+   * synchronously. Wipes any children the mount fn may have appended
+   * before throwing, pins the full message to `title`/`aria-label` so the
+   * native tooltip always has the full text, and writes a single span with
+   * a warning glyph plus the first line of the message. After a frame we
+   * measure the element and, if it's too small to read, collapse the span
+   * to just the glyph — the tooltip still carries everything.
+   */
+  #renderError(err: unknown): void {
+    const message =
+      err instanceof Error ? (err.message || err.name) : String(err);
+    const firstLine = message.split("\n", 1)[0] ?? message;
+
+    const el = this.el;
+    while (el.firstChild) el.removeChild(el.firstChild);
+    el.title = message;
+    el.setAttribute("aria-label", message);
+
+    const badge = el.ownerDocument.createElement("span");
+    badge.style.display = "inline-flex";
+    badge.style.alignItems = "center";
+    badge.style.gap = "4px";
+    badge.style.padding = "2px 6px";
+    badge.style.background = "#fef2f2";
+    badge.style.border = "1px solid #fecaca";
+    badge.style.borderRadius = "4px";
+    badge.style.color = "#991b1b";
+    badge.style.font =
+      "12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+    badge.style.maxWidth = "100%";
+    badge.style.overflow = "hidden";
+    badge.style.textOverflow = "ellipsis";
+    badge.style.whiteSpace = "nowrap";
+    badge.textContent = `${ERROR_GLYPH} ${firstLine}`;
+    el.appendChild(badge);
+
+    const applyAdaptiveText = () => {
+      const rect = el.getBoundingClientRect();
+      if (rect.width < ERROR_MIN_WIDTH || rect.height < ERROR_MIN_HEIGHT) {
+        badge.textContent = ERROR_GLYPH;
+      } else {
+        badge.textContent = `${ERROR_GLYPH} ${firstLine}`;
+      }
+    };
+    // One frame so layout has caught up with the just-cleared children.
+    requestAnimationFrame(applyAdaptiveText);
+    if (typeof ResizeObserver === "function") {
+      const ro = new ResizeObserver(applyAdaptiveText);
+      ro.observe(el);
+      // Tie the observer's lifetime to the mounted component so tearing
+      // down the subtree disconnects it cleanly.
+      this.#userCleanup = () => ro.disconnect();
+    }
+  }
+
   #reconcileStyle(prop: string): void {
     const perProp = this.#styles.get(prop);
     const style = this.el.style;
@@ -285,3 +358,11 @@ function toCssProp(prop: string): string {
 }
 
 function noop(): void {}
+
+// Below these bounds the inline error badge is collapsed to a glyph-only
+// form; the full message stays reachable via the native tooltip on the
+// element's `title`. Tuned so a typical icon-sized toolbar button stays
+// readable as text but a tiny dot stays sane.
+const ERROR_MIN_WIDTH = 140;
+const ERROR_MIN_HEIGHT = 24;
+const ERROR_GLYPH = "\u26A0"; // ⚠

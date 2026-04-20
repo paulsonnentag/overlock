@@ -14,10 +14,12 @@ function parseExpect(source) {
 }
 
 describe("passing examples", () => {
-  for (const file of readdirSync("examples/passing")) {
+  for (const file of readdirSync("test/examples/passing")) {
     if (!file.endsWith(".js")) continue;
     test(`passing/${file}`, async () => {
-      const [result] = await eslint.lintFiles([`examples/passing/${file}`]);
+      const [result] = await eslint.lintFiles([
+        `test/examples/passing/${file}`,
+      ]);
       expect(
         result.errorCount,
         `Expected no errors, got:\n${JSON.stringify(result.messages, null, 2)}`,
@@ -27,10 +29,10 @@ describe("passing examples", () => {
 });
 
 describe("failing examples", () => {
-  for (const file of readdirSync("examples/failing")) {
+  for (const file of readdirSync("test/examples/failing")) {
     if (!file.endsWith(".js")) continue;
     test(`failing/${file}`, async () => {
-      const path = `examples/failing/${file}`;
+      const path = `test/examples/failing/${file}`;
       const expected = parseExpect(readFileSync(path, "utf8"));
       expect(expected.length, `${file} must have an // expect: comment`).toBeGreaterThan(0);
       const [result] = await eslint.lintFiles([path]);

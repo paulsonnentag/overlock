@@ -1,0 +1,33 @@
+{
+  "name": "@overlock/verifier",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Browser-safe linter that enforces the overlock tool-source subset. Bundles the ESLint rules it checks against and exposes both a `verify(source, filePath?)` entry point for browsers and the raw plugin via a `./plugin` subpath for use in ESLint configs.",
+  "type": "module",
+  "main": "./dist/verifier.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/verifier.js"
+    },
+    "./plugin": "./src/plugin.js"
+  },
+  "files": ["dist", "src/plugin.js", "src/rules", "RULES.md", "README.md"],
+  "scripts": {
+    "build": "vite build && tsc --emitDeclarationOnly",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "eslint-linter-browserify": "^9.38.0"
+  },
+  "devDependencies": {
+    "@types/eslint": "^9.6.1",
+    "@types/node": "^22",
+    "eslint": "^10.2.1",
+    "typescript": "^5.8",
+    "vite": "^6",
+    "vitest": "^4.1.4"
+  }
+}

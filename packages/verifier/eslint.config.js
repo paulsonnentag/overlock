@@ -2,7 +2,7 @@ import overlock from "./src/plugin.js";
 
 export default [
   {
-    files: ["examples/**/*.js"],
+    files: ["test/examples/**/*.js"],
     languageOptions: {
       ecmaVersion: 2024,
       sourceType: "module",
