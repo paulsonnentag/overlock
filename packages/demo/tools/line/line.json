@@ -1,4 +1,4 @@
 {
-  "name": "line-tool",
-  "url": "/tools/line/line.js"
+  "name": "line",
+  "url": "./line.js"
 }

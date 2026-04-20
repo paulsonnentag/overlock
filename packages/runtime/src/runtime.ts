@@ -63,21 +63,55 @@ export class Runtime {
     this.#observer = observer;
   }
 
-  loadComponent(manifestUrl: string): Promise<string> {
+  /**
+   * Fetch a component manifest (`{ name, url }`) from `manifestUrl`,
+   * dynamic-`import()` the JS module it references, and register its
+   * default export as a mount fn under a tag derived from `manifest.name`
+   * and disambiguated via `#allocateTag`. Resolves to the final tag name.
+   *
+   * This is the *only* way to register a component from a URL. Direct
+   * JS-module loading is deliberately not supported — components are
+   * always loaded through a manifest so the tag name is explicit and
+   * travels with the component rather than being derived from a filename.
+   */
+  async loadComponent(manifestUrl: string): Promise<string> {
     this.#assertAlive();
-    return this.#doLoad(manifestUrl);
+    const url = new URL(manifestUrl, location.href);
+
+    const res = await fetch(url.href);
+    if (!res.ok) {
+      throw new Error(`Failed to fetch manifest: ${res.status} ${res.statusText}`);
+    }
+
+    const manifest: ComponentManifest = await res.json();
+    if (!manifest.name || !manifest.url) {
+      throw new Error(`Invalid manifest at ${manifestUrl}: missing "name" or "url"`);
+    }
+
+    const moduleUrl = new URL(manifest.url, url);
+    const mod = await import(/* @vite-ignore */ moduleUrl.href);
+    const mountFn = mod.default;
+    if (typeof mountFn !== "function") {
+      throw new Error(
+        `Module at ${moduleUrl.href} does not default-export a function`,
+      );
+    }
+
+    const name = this.#allocateTag(manifest.name, toScope(url));
+    this.#registerComponent(name, mountFn);
+    return name;
   }
 
   /**
    * Register a component inline, without fetching a manifest. The caller
    * chooses the tag name (must contain a hyphen, per custom-element rules)
    * and hands over the mount fn directly. Intended for root-level wiring
-   * from the embedding page — local components that have no manifest or
-   * scope, e.g. a `<module-root>` that stashes a `loadModule` on itself.
+   * from the embedding page — e.g. a `<module-root>` that stashes helpers
+   * on itself for its subtree to discover via `findClosest`.
    *
    * If an existing component is registered under the same name, any
    * currently-mounted instance is unmounted and re-mounted against the new
-   * mount fn — same behavior as `#registerComponent` in `#doLoad`.
+   * mount fn — same behavior as `#registerComponent` in `loadComponent`.
    */
   define(name: string, mountFn: MountFn): void {
     this.#assertAlive();
@@ -101,37 +135,6 @@ export class Runtime {
     if (this.#observer === null) {
       throw new Error("Runtime instance has been destroyed");
     }
-  }
-
-  async #doLoad(manifestUrl: string): Promise<string> {
-    const url = new URL(manifestUrl, location.href);
-
-    const res = await fetch(url.href);
-    if (!res.ok) {
-      throw new Error(`Failed to fetch manifest: ${res.status} ${res.statusText}`);
-    }
-
-    const manifest: ComponentManifest = await res.json();
-
-    if (!manifest.name || !manifest.url) {
-      throw new Error(`Invalid manifest at ${manifestUrl}: missing "name" or "url"`);
-    }
-
-    const moduleUrl = new URL(manifest.url, url).href;
-    const mod = await import(/* @vite-ignore */ moduleUrl);
-    const mountFn = mod.default;
-
-    if (typeof mountFn !== "function") {
-      throw new Error(
-        `Module at ${moduleUrl} does not default-export a function`,
-      );
-    }
-
-    const scope = toScope(url);
-    const name = this.#allocateTag(manifest.name, scope);
-    this.#registerComponent(name, mountFn);
-
-    return name;
   }
 
   #registerComponent(name: string, mountFn: MountFn): void {

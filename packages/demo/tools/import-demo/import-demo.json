@@ -1,4 +1,4 @@
 {
   "name": "import-demo",
-  "url": "/tools/import-demo/import-demo.js"
+  "url": "./import-demo.js"
 }

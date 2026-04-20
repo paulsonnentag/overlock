@@ -1,4 +1,4 @@
 {
   "name": "color-picker",
-  "url": "/tools/color-picker/color-picker.js"
+  "url": "./color-picker.js"
 }

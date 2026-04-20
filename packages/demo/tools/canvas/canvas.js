@@ -2,7 +2,7 @@ const CANVAS_W = 600;
 const CANVAS_H = 400;
 const DEFAULT_COLOR = "#1f2937";
 
-export default function (element) {
+export default (element) => {
   element.style.display = "inline-block";
   element.style.padding = "8px";
   element.style.background = "#f9f9f9";

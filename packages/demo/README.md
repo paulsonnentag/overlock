@@ -31,11 +31,33 @@ The DOM is:
 </module-root>
 ```
 
-- `<module-root>` is registered inline from `src/main.ts` via `runtime.define(...)` and stashes `element.loadModule = spec => import(new URL(spec, location.href).href)`. Descendants can reach it with `element.findClosest(a => a.loadModule)`.
+- `<module-root>` is registered inline from `src/main.ts` via `runtime.define(...)` and stashes two methods on its own element:
+  - `element.loadModule(url)` dynamic-`import()`s the module and _calls_ its default export once with the `<module-root>` element, resolving to whatever it returned.
+  - `element.loadComponent(url)` dynamic-`import()`s the module and hands its default export to the runtime as a mount fn, resolving to the registered tag name.
+
+  Descendants reach either method by walking up with `element.findClosest(a => a.loadComponent)`.
 - `<paint-canvas>` creates a real `<canvas>` element, then exposes `element.canvas`, `element.ctx`, and `element.color` (defaulting to `#1f2937`) on its own host element. It is the parent component for everything inside the toolbar.
 - `<line-tool>` and `<rect-tool>` find the canvas host with `element.findClosest(a => a.canvas)`. Each one renders a button. On click they set `canvas.dataset.selectedTool` to their name; while drawing they read that data attribute to decide whether the gesture is theirs, and read `host.color` to pick the stroke colour. They register pointer events on the host (not on the canvas), and filter to events whose target is the canvas.
 - `<color-picker>` does the same `findClosest` lookup and renders a row of colour swatches. Clicking a swatch writes `host.color`; the line and rectangle tools read it on the next gesture.
-- `<import-demo>` finds the nearest ancestor with a `loadModule` function (the `<module-root>` above) and asks it to `loadModule("/tools/import-demo/badge.js")`. The loaded module's default export mounts a badge into the tile, proving end-to-end scoped dynamic import via the same walking primitive.
+- `<import-demo>` walks up to the loader and exercises both entry points:
+  - `await loader.loadModule("/tools/import-demo/id-source.js")` — a code module whose default export returns a counter object. The tile uses it to stamp a serial number on its output.
+  - `await loader.loadComponent("/tools/import-demo/badge.js")` — a component module whose default export is a mount fn. The returned tag name is instantiated in the DOM and the runtime mounts it automatically.
+
+## Module shape
+
+Every module — component or code lib — has the same default-export shape: a function taking one element argument. The element is the mount target for components, or the loader itself for code libs. The return value is an optional cleanup fn for components, or an arbitrary value (typically an API object) for code libs.
+
+```js
+// Component module (canvas, line, rect, color-picker, import-demo, badge)
+export default (element) => {
+  return () => {};
+};
+
+// Code-lib module (id-source)
+export default (element) => ({
+  next() {},
+});
+```
 - Sibling tools coordinate purely through plain DOM `click` event bubbling on the host. Each tool listens for `click` on its host and re-syncs its highlight from `canvas.dataset.selectedTool` / `host.color`. No `CustomEvent`, no `MutationObserver` — neither is in the lint allowlist.
 
 ## Verify-on-load

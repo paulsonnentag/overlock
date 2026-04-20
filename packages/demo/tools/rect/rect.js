@@ -2,7 +2,7 @@ const TOOL_NAME = "rect";
 const FALLBACK_COLOR = "#1f2937";
 const STROKE_WIDTH = 2;
 
-export default function (element) {
+export default (element) => {
   const host = element.findClosest((a) => a.canvas);
   if (!host) return () => {};
   const canvas = host.canvas;

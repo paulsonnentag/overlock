@@ -1,4 +1,4 @@
 {
-  "name": "bad-line-tool",
-  "url": "/tools/bad-line/bad-line.js"
+  "name": "bad-line",
+  "url": "./bad-line.js"
 }

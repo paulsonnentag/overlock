@@ -1,4 +1,4 @@
 {
-  "name": "paint-canvas",
-  "url": "/tools/canvas/canvas.js"
+  "name": "canvas",
+  "url": "./canvas.js"
 }

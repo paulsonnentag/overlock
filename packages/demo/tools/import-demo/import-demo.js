@@ -1,8 +1,9 @@
-const BADGE_MODULE_URL = "/tools/import-demo/badge.js";
+const BADGE_URL = "/tools/import-demo/badge.json";
+const IDS_URL = "/tools/import-demo/id-source.js";
 
-export default function (element) {
+export default (element) => {
   const loader = element.findClosest(
-    (ancestor) => typeof ancestor.loadModule === "function",
+    (ancestor) => typeof ancestor.loadComponent === "function",
   );
 
   element.style.display = "inline-flex";
@@ -29,29 +30,33 @@ export default function (element) {
     };
   }
 
-  let cleanupMounted = null;
   let disposed = false;
 
-  function onLoaded(mod) {
+  async function boot() {
+    const ids = await loader.loadModule(IDS_URL);
+    const badgeTag = await loader.loadComponent(BADGE_URL);
     if (disposed) return;
     slot.textContent = "";
-    const result = mod.default(slot);
-    cleanupMounted = typeof result === "function" ? result : null;
+    slot.style.color = "#111827";
+    const tagEl = element.ownerDocument.createElement(badgeTag);
+    const counter = element.ownerDocument.createElement("span");
+    counter.textContent = "#" + ids.next();
+    counter.style.marginLeft = "6px";
+    counter.style.color = "#6b7280";
+    slot.appendChild(tagEl);
+    slot.appendChild(counter);
   }
 
-  function onFailed(err) {
+  boot().catch((err) => {
     if (disposed) return;
     const message = err && err.message ? err.message : String(err);
     slot.textContent = "load failed: " + message;
     slot.style.color = "#b91c1c";
-  }
-
-  loader.loadModule(BADGE_MODULE_URL).then(onLoaded, onFailed);
+  });
 
   return () => {
     disposed = true;
-    if (cleanupMounted) cleanupMounted();
     element.removeChild(label);
     element.removeChild(slot);
   };
-}
+};

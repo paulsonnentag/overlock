@@ -88,7 +88,7 @@ export default {
     type: "problem",
     docs: {
       description:
-        "Forbid the meta-programming surface (Reflect, Proxy, classes, with, async, generators, etc.).",
+        "Forbid the meta-programming surface (Reflect, Proxy, classes, with, generators, etc.). `async`/`await` is allowed inside the tool body; only the default-export mount fn itself must stay synchronous (enforced by `tool-shape`).",
     },
     schema: [],
     messages: {
@@ -101,8 +101,6 @@ export default {
       staticBlock: "Static class blocks are not allowed.",
       argumentsId: "The `arguments` identifier is not allowed.",
       generator: "Generator functions are not allowed.",
-      asyncFn: "`async` functions are not allowed.",
-      awaitExpr: "`await` is not allowed.",
       yieldExpr: "`yield` is not allowed.",
     },
   },
@@ -150,18 +148,6 @@ export default {
       },
       "FunctionExpression[generator=true]"(node) {
         context.report({ node, messageId: "generator" });
-      },
-      "FunctionDeclaration[async=true]"(node) {
-        context.report({ node, messageId: "asyncFn" });
-      },
-      "FunctionExpression[async=true]"(node) {
-        context.report({ node, messageId: "asyncFn" });
-      },
-      "ArrowFunctionExpression[async=true]"(node) {
-        context.report({ node, messageId: "asyncFn" });
-      },
-      AwaitExpression(node) {
-        context.report({ node, messageId: "awaitExpr" });
       },
       YieldExpression(node) {
         context.report({ node, messageId: "yieldExpr" });

@@ -1,4 +1,4 @@
-export default function (element) {
+export default (element) => {
   const badge = element.ownerDocument.createElement("span");
   badge.textContent = "loaded via scoped import";
   badge.style.padding = "2px 8px";

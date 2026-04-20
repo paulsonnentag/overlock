@@ -19,6 +19,13 @@ export type ElementPredicate = (el: ComponentElement) => boolean;
  * Outward navigation goes through `findParent` / `findClosest`, which walk
  * the registered-component chain (skipping plain DOM ancestors) and return
  * a proxy bound to the caller's identity, or `null` if nothing matches.
+ *
+ * Components may stash arbitrary ad-hoc properties on their element (e.g.
+ * a paint-canvas stashing `canvas`/`ctx`/`color`; a module-root stashing a
+ * `loadModule`/`loadComponent` pair). Those are application-level
+ * conventions, not runtime primitives, and are intentionally not typed on
+ * this surface — consumers reach them through `findClosest` + a predicate
+ * and handle narrowing at the use site.
  */
 export type ComponentElement = HTMLElement & {
   /**
@@ -30,12 +37,6 @@ export type ComponentElement = HTMLElement & {
    * Like `findParent`, but tests `this` first (mirrors `Element.closest`).
    */
   findClosest(predicate: ElementPredicate): ComponentElement | null;
-  /**
-   * Convention slot for a scoped module loader. A component that wants to
-   * be a loader for its subtree stashes a function here in its mount fn;
-   * consumers find it via `element.findClosest(a => a.loadModule)`.
-   */
-  loadModule?: (specifier: string) => Promise<unknown>;
 };
 
 export type MountFn = (el: ComponentElement) => void | (() => void);

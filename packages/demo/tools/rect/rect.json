@@ -1,4 +1,4 @@
 {
-  "name": "rect-tool",
-  "url": "/tools/rect/rect.js"
+  "name": "rect",
+  "url": "./rect.js"
 }

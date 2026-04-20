@@ -9,18 +9,49 @@ const MANIFESTS = [
   "/tools/bad-line/bad-line.json",
 ];
 
+// Properties the <module-root> loader stashes on its own element for
+// descendants to discover via `findClosest`. These are a local convention
+// of this demo — `ComponentElement` is intentionally kept free of
+// loader-flavored slots so the runtime doesn't grow an opinion about what
+// ad-hoc surface components are allowed to expose.
+type ModuleRootLoader = {
+  loadModule(url: string): Promise<unknown>;
+  loadComponent(url: string): Promise<string>;
+};
+
 async function main() {
   const app = document.getElementById("app")!;
   const runtime = createRuntime(app);
 
-  // Root-level loader: any tool mounted under <module-root> can call
-  // `loadModule(element, "./foo.js")` and `findClosest` will bubble up to
-  // this component. Nested loader components can shadow it for a subtree.
+  // Any tool mounted under <module-root> can walk up with
+  // `element.findClosest(a => typeof a.loadComponent === "function")` and
+  // bootstrap more code or components off of it. Nested loader components
+  // can shadow this one for a subtree.
+  //
+  // `loadModule(url)` takes a JS URL — it dynamic-imports the file and
+  // *calls* its default export once with this loader's own element,
+  // returning whatever came back (typically an object for code libs).
+  //
+  // `loadComponent(manifestUrl)` takes a *manifest* URL and hands it to
+  // the runtime, which fetches the JSON, imports the referenced JS file,
+  // registers its default export as a mount fn under the manifest's name,
+  // and returns the final tag name.
   runtime.define("module-root", (element) => {
-    element.loadModule = (specifier: string): Promise<unknown> =>
-      import(/* @vite-ignore */ new URL(specifier, location.href).href);
+    const loader = element as typeof element & Partial<ModuleRootLoader>;
+    loader.loadModule = async (url: string) => {
+      const mod = await import(
+        /* @vite-ignore */ new URL(url, location.href).href
+      );
+      if (typeof mod.default !== "function") {
+        throw new Error(`Module at ${url} does not default-export a function`);
+      }
+      return mod.default(element);
+    };
+    loader.loadComponent = (url: string) =>
+      runtime.loadComponent(new URL(url, location.href).href);
     return () => {
-      element.loadModule = undefined;
+      loader.loadModule = undefined;
+      loader.loadComponent = undefined;
     };
   });
 
