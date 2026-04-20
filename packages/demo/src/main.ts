@@ -1,14 +1,5 @@
-import { createRuntime, MountFn, Runtime } from "@overlock/runtime";
+import { createRuntime, type MountFn, type Runtime } from "@overlock/runtime";
 import { verify } from "@overlock/verifier";
-
-const MANIFESTS = [
-  "/tools/canvas/canvas.json",
-  "/tools/line/line.json",
-  "/tools/rect/rect.json",
-  "/tools/color-picker/color-picker.json",
-  "/tools/import-demo/import-demo.json",
-  "/tools/bad-line/bad-line.json",
-];
 
 // Properties the <module-root> loader stashes on its own element for
 // descendants to discover via `findClosest`. These are a local convention
@@ -33,51 +24,38 @@ async function main() {
   runtime.define("module-root", (element) => {
     const loader = element as typeof element & Partial<ModuleRootLoader>;
     loader.loadModule = (url: string) => loadModuleVerified(element, url);
-    loader.loadComponent = (url: string) =>
-      loadComponentVerified(runtime, new URL(url, location.href).href);
+    loader.loadComponent = (url: string) => loadComponentVerified(runtime, new URL(url, location.href).href);
     return () => {
       loader.loadModule = undefined;
       loader.loadComponent = undefined;
     };
   });
 
-  const results = await Promise.allSettled(
-    MANIFESTS.map((url) => loadComponentVerified(runtime, url)),
-  );
-  (window as unknown as { runtime: typeof runtime }).runtime = runtime;
-
-  const rejections = collectRejections(results);
-  if (rejections.length > 0) {
-    app.appendChild(renderRejectionBox(rejections));
-  }
+  await loadComponentVerified(runtime, "/tools/canvas/canvas.json");
+  await loadComponentVerified(runtime, "/tools/line/line.json");
+  await loadComponentVerified(runtime, "/tools/rect/rect.json");
+  await loadComponentVerified(runtime, "/tools/color-picker/color-picker.json");
+  await loadComponentVerified(runtime, "/tools/import-demo/import-demo.json");
+  await loadComponentVerified(runtime, "/tools/bad-line/bad-line.json");
 }
-
-main().catch((err) => {
-  const app = document.getElementById("app")!;
-  const pre = document.createElement("pre");
-  pre.style.color = "#b91c1c";
-  pre.style.whiteSpace = "pre-wrap";
-  pre.textContent = String(err && err.message ? err.message : err);
-  app.appendChild(pre);
-  console.error(err);
-});
 
 /**
  * Fetch a manifest, fetch the referenced JS source, run the browser
  * verifier against it, then dynamic-import the same URL (browsers serve
  * the cached fetch so there's no blob URL and no duplicate network hit)
  * and register the default export under the manifest's name.
+ *
+ * Any failure — unreachable manifest, invalid manifest, verifier
+ * rejection, import/shape mismatch — throws. Callers that care can
+ * `.catch` it; callers that fire-and-forget let it become an unhandled
+ * rejection, which surfaces in devtools on its own. The tool's tag in
+ * the page stays unregistered and renders as nothing.
  */
-async function loadComponentVerified(
-  runtime: Runtime,
-  manifestUrl: string,
-): Promise<string> {
+async function loadComponentVerified(runtime: Runtime, manifestUrl: string): Promise<string> {
   const url = new URL(manifestUrl, location.href);
   const manifestRes = await fetch(url.href);
   if (!manifestRes.ok) {
-    throw new Error(
-      `Failed to fetch manifest ${url.href}: ${manifestRes.status} ${manifestRes.statusText}`,
-    );
+    throw new Error(`Failed to fetch manifest ${url.href}: ${manifestRes.status} ${manifestRes.statusText}`);
   }
   const manifest = (await manifestRes.json()) as Manifest;
   if (!manifest.name || !manifest.url) {
@@ -95,10 +73,7 @@ async function loadComponentVerified(
  * call the default export once with the loader element. Returns whatever
  * the module produced (typically an object of helpers).
  */
-async function loadModuleVerified(
-  element: HTMLElement,
-  url: string,
-): Promise<unknown> {
+async function loadModuleVerified(element: HTMLElement, url: string): Promise<unknown> {
   const jsUrl = new URL(url, location.href).href;
   const fn = await fetchVerifyImportDefault(jsUrl);
   return fn(element);
@@ -112,14 +87,10 @@ async function loadModuleVerified(
  * export, asserting it is a function — both component mount fns and code
  * libraries are single-function modules in this convention.
  */
-async function fetchVerifyImportDefault(
-  jsUrl: string,
-): Promise<(element: HTMLElement) => unknown> {
+async function fetchVerifyImportDefault(jsUrl: string): Promise<(element: HTMLElement) => unknown> {
   const srcRes = await fetch(jsUrl);
   if (!srcRes.ok) {
-    throw new Error(
-      `Failed to fetch ${jsUrl}: ${srcRes.status} ${srcRes.statusText}`,
-    );
+    throw new Error(`Failed to fetch ${jsUrl}: ${srcRes.status} ${srcRes.statusText}`);
   }
   const src = await srcRes.text();
   verify(src, jsUrl);
@@ -128,47 +99,4 @@ async function fetchVerifyImportDefault(
     throw new Error(`Module at ${jsUrl} does not default-export a function`);
   }
   return mod.default as (element: HTMLElement) => unknown;
-}
-
-type Rejection = { manifest: string; reason: unknown };
-
-function collectRejections(
-  results: PromiseSettledResult<string>[],
-): Rejection[] {
-  const rejections: Rejection[] = [];
-  for (let i = 0; i < results.length; i++) {
-    const r = results[i];
-    if (r.status === "rejected") {
-      rejections.push({ manifest: MANIFESTS[i], reason: r.reason });
-    }
-  }
-  return rejections;
-}
-
-function renderRejectionBox(rejections: Rejection[]): HTMLElement {
-  const box = document.createElement("div");
-  box.style.padding = "12px";
-  box.style.background = "#fef2f2";
-  box.style.border = "1px solid #fecaca";
-  box.style.borderRadius = "8px";
-  box.style.color = "#991b1b";
-  box.style.fontFamily = "ui-monospace, SFMono-Regular, monospace";
-  box.style.whiteSpace = "pre-wrap";
-
-  const heading = document.createElement("strong");
-  heading.textContent = `Verifier rejected ${rejections.length} tool${rejections.length > 1 ? "s" : ""}:`;
-  box.appendChild(heading);
-
-  for (const { manifest, reason } of rejections) {
-    const pre = document.createElement("pre");
-    pre.style.margin = "8px 0 0 0";
-    pre.style.whiteSpace = "pre-wrap";
-    const message =
-      reason && typeof reason === "object" && "message" in reason
-        ? (reason as Error).message
-        : String(reason);
-    pre.textContent = `(${manifest})\n${message}`;
-    box.appendChild(pre);
-  }
-  return box;
 }

@@ -62,23 +62,23 @@ export default (element) => ({
 
 ## Verify-on-load
 
-The dev server has a verify-on-load Vite plugin (`src/verify-plugin.ts`) that intercepts `tools/**/*.js` requests, runs ESLint with `overlock/recommended` against the source, and either passes the file through or replies with a JS module that throws on import. The dynamic `import()` inside `runtime.loadComponent` then rejects, and the failure surfaces as a red box in `#app` while the other tools still mount.
+The dev server has a verify-on-load Vite plugin (`src/verify-plugin.ts`) that intercepts `tools/**/*.js` requests, runs ESLint with `overlock/recommended` against the source, and either passes the file through or replies with a JS module that throws on import. `src/main.ts` fetches the source through `verify` from `@overlock/verifier` before dynamic-`import()`ing it, so failures surface the same way whether the plugin caught them first or the in-page verifier did: `loadComponentVerified` throws, the tag stays unregistered, and the page renders the rest normally. Broken tools produce no DOM — they just fail to claim a tag.
 
-The demo ships a checked-in `tools/bad-line/bad-line.js` that breaks several rules at once (top-level `console.log`, `eval`, computed member access, `document` reference). On every page load `src/main.ts` asks the runtime to load it, and you should see the verifier rejecting it in the red box on the page. The legal tools mount alongside.
+The fire-and-forget `for (const url of MANIFESTS)` loop does not await or `.catch` the returned promise, so verifier rejections become unhandled promise rejections and surface in devtools directly:
 
 ```
-Verifier rejected 1 tool:
-(/tools/bad-line/bad-line.json)
-[overlock verify] /tools/bad-line/bad-line.js failed verification:
-  bad-line.js:5:1  overlock/no-restricted-globals  `console` is not in the allowlist of permitted free identifiers
-  bad-line.js:5:1  overlock/no-top-level-side-effects  Top-level `ExpressionStatement` is not allowed
-  bad-line.js:11:3  overlock/no-restricted-globals  `eval` is not in the allowlist
-  bad-line.js:11:3  overlock/no-dynamic-code  `eval` is not allowed
-  bad-line.js:13:3  overlock/no-computed-member  Computed member access must use a string or number literal key
-  bad-line.js:15:3  overlock/no-restricted-globals  `document` is not in the allowlist
+Uncaught (in promise) Error: /tools/bad-line/bad-line.js failed verification:
+  bad-line.js:6:1  overlock/no-top-level-side-effects  Top-level `ExpressionStatement` is not allowed
+  bad-line.js:6:1  overlock/no-restricted-globals  `console` is not in the allowlist
+  bad-line.js:12:3  overlock/no-dynamic-code  `eval` is not allowed
+  bad-line.js:12:3  overlock/no-restricted-globals  `eval` is not in the allowlist
+  bad-line.js:14:11  overlock/no-computed-member  Computed member access must use a string or number literal key
+  bad-line.js:16:3  overlock/no-restricted-globals  `document` is not in the allowlist
 ```
 
-To try a different violation, edit `tools/line/line.js` (a legal tool) and add e.g. `eval("0");` to the mount function. Reload — the line tool joins the rejected list while the rest of the page keeps working. Revert to bring it back.
+The demo ships a checked-in `tools/bad-line/bad-line.js` that breaks several rules at once (top-level `console.log`, `eval`, computed member access, `document` reference). On every page load `src/main.ts` asks the runtime to load it; it fails verification and nothing is placed in the DOM for it. The legal tools mount alongside.
+
+To try a different violation, edit `tools/line/line.js` (a legal tool) and add e.g. `eval("0");` to the mount function. Reload — the Line button is gone, the other tools still work, and the verifier message is in the console. Revert to bring it back.
 
 ### Why `pnpm lint` doesn't trip on `bad-line`
 
